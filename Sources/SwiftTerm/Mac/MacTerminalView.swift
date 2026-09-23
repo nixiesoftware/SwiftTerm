@@ -3568,19 +3568,11 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
     private var pointerPressSnapshot = SemanticPromptPointerSnapshot(
         selectionWasActive: false, didDrag: false, clickCount: 0,
         pressWasSemanticEligible: false)
-    private var pendingSemanticClick: DispatchWorkItem?
-    var semanticClickCoalescingDelay: TimeInterval = NSEvent.doubleClickInterval
-    /// Number of times a semantic-prompt click deferral was scheduled. Used by
-    /// tests to confirm the F.5 pre-gate skips scheduling when routing cannot
-    /// apply.
-    private(set) var semanticDeferralScheduleCount = 0
-    var semanticClickPendingForTesting: Bool {
-        pendingSemanticClick != nil
-    }
-
+    private var pointerPressPoint: CGPoint?
+    private var pointerPressGrid: Position?
+    // Keep the viewport cell so output scrolling cannot look like pointer movement.
+    private var pointerPressScreenGrid: Position?
     open override func mouseDown(with event: NSEvent) {
-        pendingSemanticClick?.cancel()
-        pendingSemanticClick = nil
         didSelectionDrag = false
         previousPressureStage = 0
         forceClickHandledForCurrentPress = false
@@ -3590,21 +3582,26 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
                 didDrag: false,
                 clickCount: event.clickCount,
                 pressWasSemanticEligible: false)
-            let pressLocation = calculateMouseHitLocked(
-                at: convert(event.locationInWindow, from: nil)).grid
+            let pressPoint = convert(event.locationInWindow, from: nil)
+            let pressLocation = calculateMouseHitLocked(at: pressPoint).grid
+            pointerPressPoint = pressPoint
+            pointerPressGrid = pressLocation
+            pointerPressScreenGrid = Position(
+                col: pressLocation.col,
+                row: pressLocation.row - terminal.displayBuffer.yDisp)
             terminal.beginPrimaryPointerPress(at: pressLocation)
             if allowMouseReporting && !shiftBypassesMouseReportingLocked(for: event) && terminal.mouseMode.sendButtonPress() {
                 return true
             }
             pointerPressSnapshot.pressWasSemanticEligible = true
-            let hit = calculateMouseHitLocked(at: convert(event.locationInWindow, from: nil)).grid
+            let hit = pressLocation
             switch event.clickCount {
             case 1:
                 if selection.active == true {
                     if event.modifierFlags.contains(.shift) {
                         selection.shiftExtend(bufferPosition: Position(col: hit.col, row: hit.row))
                     } else {
-                        selection.active = false
+                        selection.selectNone()
                     }
                 }
             case 2:
@@ -3633,11 +3630,25 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
     }
     
     var didSelectionDrag: Bool = false
+
+    private func isSelectionDrag(to point: CGPoint, hit: Position, yDisp: Int) -> Bool {
+        guard let pressPoint = pointerPressPoint,
+              let pressScreenGrid = pointerPressScreenGrid else {
+            return false
+        }
+        let screenGrid = Position(col: hit.col, row: hit.row - yDisp)
+        if screenGrid != pressScreenGrid { return true }
+        let threshold = max(3, min(cellDimension.width, cellDimension.height) / 2)
+        return hypot(point.x - pressPoint.x, point.y - pressPoint.y) >= threshold
+    }
     
     open override func mouseUp(with event: NSEvent) {
         defer {
             didSelectionDrag = false
             pointerPressSnapshot.pressWasSemanticEligible = false
+            pointerPressPoint = nil
+            pointerPressGrid = nil
+            pointerPressScreenGrid = nil
             forceClickHandledForCurrentPress = false
             withTerminal { terminal in
                 terminal.endPrimaryPointerPress()
@@ -3646,7 +3657,30 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
         stopSelectionAutoScrollTimer()
         autoScrollDelta = 0
         lastSelectionDragPoint = nil
-        let hit = calculateMouseHit(with: event).grid
+        let releasePoint = convert(event.locationInWindow, from: nil)
+        let (hit, startedDrag) = withTerminal { terminal -> (Position, Bool) in
+            let hit = calculateMouseHitLocked(at: releasePoint).grid
+            guard !didSelectionDrag, !forceClickHandledForCurrentPress,
+                  !(allowMouseReporting &&
+                    !shiftBypassesMouseReportingLocked(for: event) &&
+                    terminal.mouseMode != .off),
+                  isSelectionDrag(to: releasePoint, hit: hit,
+                                  yDisp: terminal.displayBuffer.yDisp) else {
+                return (hit, false)
+            }
+            if selection.active {
+                selection.dragExtend(bufferPosition: hit)
+            } else if let pressGrid = pointerPressGrid {
+                selection.setSoftStart(bufferPosition: pressGrid)
+                selection.startSelection()
+                selection.dragExtend(bufferPosition: hit)
+            }
+            return (hit, true)
+        }
+        if startedDrag {
+            didSelectionDrag = true
+            setNeedsDisplay(bounds)
+        }
         updateHoverLink(at: hit, commandOverride: commandActive || event.modifierFlags.contains(.command))
         if !forceClickHandledForCurrentPress,
            !didSelectionDrag,
@@ -3661,51 +3695,22 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
 
         guard !forceClickHandledForCurrentPress else { return }
 
-        // The semantic route runs last, after the double-click interval.
-        // A second press cancels this work before word selection completes.
+        // Route a single click on release. Later presses still select words
+        // or rows according to their click count.
         var snapshot = pointerPressSnapshot
         snapshot.didDrag = didSelectionDrag
         guard snapshot.clickCount == 1 else { return }
         let modifiers = semanticPromptModifiers(for: event)
-        // F.5: don't schedule the deferral (retaining a line and arming a
-        // timer for the full double-click interval) when routing can never
-        // apply — before any OSC 133, when disabled, not armed, no click mode,
-        // or the gesture disqualifies. Eligibility is re-derived at fire time
-        // too; this only skips pointless scheduling.
-        let hitLine = withTerminal { terminal -> BufferLine? in
+        let handled = withTerminal { terminal -> Bool in
+            snapshot.selectionIsActiveAtRelease = selection.active
             guard terminal.mightRouteSemanticPromptClick(modifiers: modifiers,
                                                           snapshot: snapshot) else {
-                return nil
+                return false
             }
-            return terminal.bufferLine(atRow: hit.row)
+            return terminal.handleSemanticPromptClick(
+                at: hit, modifiers: modifiers, snapshot: snapshot)
         }
-        guard let hitLine else { return }
-        semanticDeferralScheduleCount += 1
-        // Capture the clicked line's identity, not its absolute row: the row
-        // index shifts if scrollback trims during the coalescing delay, so
-        // re-resolve it at fire time and drop the click if the line is gone.
-        let hitColumn = hit.col
-        let hitGeneration = hitLine.recycleGeneration
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.pendingSemanticClick = nil
-            let handled = self.withTerminal { terminal in
-                guard let resolvedRow = terminal.semanticRow(forLineIdentity: hitLine,
-                                                              recycleGeneration: hitGeneration) else {
-                    return false
-                }
-                return terminal.handleSemanticPromptClick(
-                    at: Position(col: hitColumn, row: resolvedRow),
-                    modifiers: modifiers,
-                    snapshot: snapshot)
-            }
-            if handled {
-                self.setNeedsDisplay(self.bounds)
-            }
-        }
-        pendingSemanticClick = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + semanticClickCoalescingDelay,
-                                      execute: workItem)
+        if handled { setNeedsDisplay(bounds) }
 
         #if DEBUG
         // let hit = calculateMouseHit(with: event)
@@ -3715,9 +3720,10 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
     }
     
     open override func mouseDragged(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
         let dragInfo = withTerminal { terminal -> (hit: Position, displayYDisp: Int, displayRows: Int, handled: Bool) in
             let displayBuffer = terminal.displayBuffer
-            let mouseHit = calculateMouseHitLocked(at: convert(event.locationInWindow, from: nil))
+            let mouseHit = calculateMouseHitLocked(at: point)
             let hit = mouseHit.grid
             if allowMouseReporting && !shiftBypassesMouseReportingLocked(for: event) {
                 if terminal.mouseMode.sendButtonTracking() {
@@ -3731,11 +3737,17 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
                 }
             }
 
+            if !didSelectionDrag &&
+                !isSelectionDrag(to: point, hit: hit, yDisp: displayBuffer.yDisp) {
+                return (hit, displayBuffer.yDisp, displayBuffer.rows, true)
+            }
+
             if selection.active {
                 selection.dragExtend(bufferPosition: Position(col: hit.col, row: hit.row))
             } else {
-                selection.setSoftStart(bufferPosition: Position(col: hit.col, row: hit.row))
+                selection.setSoftStart(bufferPosition: pointerPressGrid ?? hit)
                 selection.startSelection()
+                selection.dragExtend(bufferPosition: hit)
             }
             return (hit, displayBuffer.yDisp, displayBuffer.rows, false)
         }
@@ -3743,7 +3755,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
             return
         }
         didSelectionDrag = true
-        lastSelectionDragPoint = convert(event.locationInWindow, from: nil)
+        lastSelectionDragPoint = point
         autoScrollDelta = 0
         let screenRow = dragInfo.hit.row - dragInfo.displayYDisp
         if withTerminal({ _ in selection.active }) {

@@ -114,10 +114,9 @@ public final class BufferLine: CustomDebugStringConvertible {
         set { owningBufferRef = newValue?.selfRef }
     }
     /// Bumped each time this line object is reused for different content
-    /// (recycle, reset). A deferred pointer click captures this alongside the
-    /// line identity; a mismatch at fire time means the object was recycled
-    /// into a new row and the click must be dropped — identity alone cannot
-    /// tell, because `CircularList.recycle` keeps the object in the array.
+    /// (recycle, reset). A host that stores a line identity can check this
+    /// value before it uses the line later. Identity alone cannot detect
+    /// reuse because `CircularList.recycle` keeps the object in the array.
     private(set) var recycleGeneration: UInt64 = 0
     // The page owns only packed cells. Its arena is shared by all lines in the
     // same terminal.

@@ -506,8 +506,8 @@ public final class Buffer {
     }
 
     /// The current absolute row of a line, by identity, or nil if it has
-    /// been trimmed or recycled away. Used to re-resolve a deferred click's
-    /// target after scrollback may have shifted every index. Reuses the one
+    /// been trimmed or recycled away. Hosts can use this to re-resolve a
+    /// stored target after scrollback has shifted row indexes. Reuses the one
     /// identity-scan implementation, hinted near the origin cache (E.5).
     func absoluteRow(of line: BufferLine) -> Int? {
         findRow(near: semanticPromptStartRowCache, where: { $0 === line })
