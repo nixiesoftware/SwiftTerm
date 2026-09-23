@@ -1016,7 +1016,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                     selectionWasActive: selection.active,
                     didDrag: false,
                     clickCount: 1,
-                    pressWasSemanticEligible: true)
+                    pressWasSemanticEligible: true,
+                    selectionIsActiveAtRelease: false)
                 let hadSelection = selection.active
                 if selection.active {
                     selection.selectNone()
@@ -1030,9 +1031,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             } else {
                 let location = gestureRecognizer.location(in: gestureRecognizer.view)
                 let tapLoc = calculateTapHit(gesture: gestureRecognizer).grid
-                if abs(tapLoc.col - state.cursor.col) < 4 && abs(tapLoc.row - state.cursor.row) < 2 {
+                let nearCursor = abs(tapLoc.col - state.cursor.col) < 4 &&
+                    abs(tapLoc.row - state.cursor.row) < 2
+                if TerminalTapPolicy.showsContextMenu(
+                    nearCursor: nearCursor, clearedSelection: state.hadSelection) {
                     showContextMenu (forRegion: makeContextMenuRegionForTap (point: location), pos: tapLoc)
-                } else {
+                } else if !nearCursor {
                     _ = withTerminal { terminal in
                         terminal.handleSemanticPromptClick(
                             at: tapHit,
