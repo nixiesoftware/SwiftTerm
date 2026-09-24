@@ -468,6 +468,7 @@ struct CacheSignature: Hashable {
     let bidiHostPolicy: BidiHostPolicy
     let attributeContextIdentity: UInt64
     let glyphFallbackIdentity: UInt64
+    let rowStylesVersion: UInt64
 }
 
 struct MetalProfileCounters {
@@ -1485,7 +1486,8 @@ final class MetalTerminalRenderer {
                                        kittyStamp: kittyStamp,
                                        bidiHostPolicy: context.bidiHostPolicy,
                                        attributeContextIdentity: context.identity,
-                                       glyphFallbackIdentity: context.glyphFallbackProvider?.cacheIdentity ?? 0)
+                                       glyphFallbackIdentity: context.glyphFallbackProvider?.cacheIdentity ?? 0,
+                                       rowStylesVersion: context.rowStylesVersion)
         let signatureChanged = signature != cacheSignature
         if signatureChanged {
             if signature.glyphFallbackIdentity != cacheSignature?.glyphFallbackIdentity {

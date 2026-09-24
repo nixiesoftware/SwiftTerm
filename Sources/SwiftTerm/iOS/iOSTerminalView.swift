@@ -329,7 +329,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         return useMetalRenderer
     }
 #endif
-    var cellDimension: CellDimension
+    /// The size of one cell in points, as the current font and line spacing
+    /// set it. Rows and columns are placed at whole multiples of it.
+    public internal(set) var cellDimension: CellDimension
     var caretView: CaretView?
     var _lineSpacing: CGFloat = 1.0
     var terminal: Terminal!
@@ -1714,6 +1716,37 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
 
+    /// Styles the host lays over buffer rows, keyed by absolute buffer row.
+    /// A row with no entry draws as the program wrote it. See
+    /// ``TerminalRowStyle``; rows that scroll out of the buffer are the
+    /// host's to forget.
+    public var rowStyles: [Int: TerminalRowStyle] = [:] {
+        didSet {
+            guard rowStyles != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+    var rowStylesVersion: UInt64 = 0
+
+    /// Drawn by the host over each row the CoreGraphics renderer finishes,
+    /// before the caret. `rowRect` is the row's rectangle in `context`'s
+    /// coordinates, which are flipped: the origin is the row's bottom-left
+    /// and y grows upward. The Metal renderer does not call this.
+    open func drawRowDecorations(absoluteRow: Int, rowRect: CGRect, in context: CGContext) {
+    }
+
+    /// How long the caret stays visible, and hidden, on each blink.
+    public var caretBlinkInterval: TimeInterval = 0.7 {
+        didSet { caretView?.updateCursorStyle() }
+    }
+
+    /// Blink by switching between shown and hidden rather than fading.
+    public var caretBlinksInSteps: Bool = false {
+        didSet { caretView?.updateCursorStyle() }
+    }
+
     /// When true, custom block/box glyphs use anti-aliasing instead of pixel-aligned edges.
     public var antiAliasCustomBlockGlyphs: Bool = false {
         didSet {
@@ -2083,7 +2116,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         #endif
     }
     
-    override public func draw (_ dirtyRect: CGRect) {
+    open override func draw (_ dirtyRect: CGRect) {
 #if canImport(MetalKit)
         if useMetalRenderer {
             return

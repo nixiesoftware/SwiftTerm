@@ -530,6 +530,11 @@ struct FrameViewState: Sendable {
     let useBrightColors: Bool
     let bidiHostPolicy: BidiHostPolicy
     let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
+    /// Host row styles at capture time, keyed by absolute buffer row.
+    let rowStyles: [Int: TerminalRowStyle]
+    /// Bumped on every change to the row styles, so a renderer that caches
+    /// rows by content rebuilds them.
+    let rowStylesVersion: UInt64
 
     var effectiveForegroundColor: FrameColor { appearance.effectiveForegroundColor }
     var effectiveBackgroundColor: FrameColor { appearance.effectiveBackgroundColor }
@@ -570,6 +575,8 @@ struct FrameViewState: Sendable {
         useBrightColors = view.useBrightColors
         bidiHostPolicy = view.bidiHostPolicy
         glyphFallbackProvider = view.glyphFallbackProvider
+        rowStyles = view.rowStyles
+        rowStylesVersion = view.rowStylesVersion
     }
 }
 
@@ -635,6 +642,9 @@ struct SnapshotRenderContext {
     let useBrightColors: Bool
     let bidiHostPolicy: BidiHostPolicy
     let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
+    /// Host row styles, keyed by absolute buffer row. See ``TerminalRowStyle``.
+    let rowStyles: [Int: TerminalRowStyle]
+    let rowStylesVersion: UInt64
     let cols: Int
 
     /// Identifies the values used to build attributed-string dictionaries.
@@ -693,6 +703,8 @@ struct SnapshotRenderContext {
         useBrightColors = viewState.useBrightColors
         bidiHostPolicy = viewState.bidiHostPolicy
         glyphFallbackProvider = viewState.glyphFallbackProvider
+        rowStyles = viewState.rowStyles
+        rowStylesVersion = viewState.rowStylesVersion
         self.cols = cols
 
         var identityHasher = Hasher()
@@ -1427,7 +1439,7 @@ extension TerminalView {
             })
     }
 
-    typealias CellDimension = CGSize
+    public typealias CellDimension = CGSize
 
     // Reads the viewStateLock-guarded mirror of `terminal.reverseColors`,
     // refreshed synchronously by the colorChanged delegate (which DECSCNM
@@ -1642,6 +1654,13 @@ extension TerminalView {
     /// Returns copied terminal state for status displays and diagnostics.
     public nonisolated func terminalStateSnapshot() -> TerminalViewStateSnapshot {
         renderOwner.stateSnapshot()
+    }
+
+    /// The shell-declared role of the first cell of every buffer row, as a
+    /// copied value. A host that draws the shell as a page reads this after
+    /// each feed and sets ``rowStyles`` by it. See ``TerminalSemanticRoles``.
+    public nonisolated func semanticLeadingRoles() -> TerminalSemanticRoles {
+        renderOwner.semanticLeadingRoles()
     }
 
     /// Copies terminal buffer contents without exposing the mutable terminal.
@@ -3613,6 +3632,9 @@ extension TerminalView {
             case .doubleWidth:
                 context.restoreGState()
             }
+            // The host's turn, over the finished row and under the caret.
+            let rowRect = CGRect(x: 0, y: lineOrigin.y, width: frame.width, height: cellDimension.height)
+            drawRowDecorations(absoluteRow: row, rowRect: rowRect, in: context)
         }
         
 #if os(macOS)

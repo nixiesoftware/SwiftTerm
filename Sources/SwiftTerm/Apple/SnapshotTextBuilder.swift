@@ -335,6 +335,9 @@ final class SnapshotTextBuilder {
         var blockElements: [BlockElementRenderItem] = []
         var boxDrawings: [BoxDrawingRenderItem] = []
         var powerlineGlyphs: [PowerlineRenderItem] = []
+        // A row the host restyles bypasses the per-key memo below: the
+        // attribute it draws is not the one the cell packs.
+        let rowStyle = context.rowStyles[absoluteRow]
         
         // Batching state: accumulate consecutive characters with the same attributes
         var pendingText = ""
@@ -386,7 +389,10 @@ final class SnapshotTextBuilder {
             let hasUrl = shouldUnderlineLink(row: absoluteRow, column: col, width: width,
                                              cell: ch, context: context)
             let attributes: SnapshotTextAttributes?
-            if baseAttributesStyleKey == styleKey && baseAttributesHasUrl == hasUrl {
+            if let rowStyle, let cellStyle = rowStyle.style(for: ch.semanticContent) {
+                attributes = getAttributes(cellStyle.apply(to: attr), withUrl: hasUrl,
+                                           context: context)
+            } else if baseAttributesStyleKey == styleKey && baseAttributesHasUrl == hasUrl {
                 attributes = baseAttributes
             } else {
                 attributes = getAttributes(styleKey, attribute: attr, withUrl: hasUrl,

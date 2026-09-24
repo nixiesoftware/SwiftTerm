@@ -480,7 +480,9 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
 
 #endif
 
-    var cellDimension: CellDimension!
+    /// The size of one cell in points, as the current font and line spacing
+    /// set it. Rows and columns are placed at whole multiples of it.
+    public internal(set) var cellDimension: CellDimension!
     var caretView: CaretView!
     var _fontSmoothing: Bool = true
     var _lineSpacing: CGFloat = 1.0
@@ -1284,6 +1286,27 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
     /// Controls weather to use high ansi colors, if false terminal will use bold text instead of high ansi colors
     public var useBrightColors: Bool = true
 
+    /// Styles the host lays over buffer rows, keyed by absolute buffer row.
+    /// A row with no entry draws as the program wrote it. See
+    /// ``TerminalRowStyle``; rows that scroll out of the buffer are the
+    /// host's to forget.
+    public var rowStyles: [Int: TerminalRowStyle] = [:] {
+        didSet {
+            guard rowStyles != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+    var rowStylesVersion: UInt64 = 0
+
+    /// Drawn by the host over each row the CoreGraphics renderer finishes,
+    /// before the caret. `rowRect` is the row's rectangle in `context`'s
+    /// coordinates, which are flipped: the origin is the row's bottom-left
+    /// and y grows upward. The Metal renderer does not call this.
+    open func drawRowDecorations(absoluteRow: Int, rowRect: CGRect, in context: CGContext) {
+    }
+
     /// Controls whether this view applies the terminal's BiDi presentation state.
     public var bidiHostPolicy: BidiHostPolicy = .respectTerminal {
         didSet {
@@ -1680,7 +1703,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
         NSGraphicsContext.current?.cgContext
     }
     
-    override public func draw (_ dirtyRect: NSRect) {
+    open override func draw (_ dirtyRect: NSRect) {
 #if canImport(MetalKit)
         if metalView != nil {
             return

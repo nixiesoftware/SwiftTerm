@@ -344,6 +344,21 @@ final class TerminalRenderOwner: Sendable {
         }
     }
 
+    /// The leading cell's OSC 133 role for every row of the active buffer,
+    /// copied under the terminal lock.
+    func semanticLeadingRoles() -> TerminalSemanticRoles {
+        guard let terminal = currentSession()?.terminal else {
+            return TerminalSemanticRoles(baseRow: 0, roles: [])
+        }
+        return terminal.terminalLock.withLock {
+            let buffer = terminal.buffer
+            let roles = (0..<buffer.lines.count).map { row in
+                buffer.lines[row].packedView(at: 0).semanticContent
+            }
+            return TerminalSemanticRoles(baseRow: buffer.yBase, roles: roles)
+        }
+    }
+
     func stateSnapshot() -> TerminalViewStateSnapshot {
         guard let terminal = currentSession()?.terminal else {
             return TerminalViewStateSnapshot(

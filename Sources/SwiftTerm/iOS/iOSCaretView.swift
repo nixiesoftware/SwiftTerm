@@ -78,8 +78,21 @@ class CaretView: UIView {
         if window == nil {
             return
         }
+        let interval = terminal?.caretBlinkInterval ?? 0.7
+        if to, terminal?.caretBlinksInSteps == true {
+            // Shown, then hidden, with nothing in between: the blink of a
+            // hardware terminal rather than a fade.
+            let blink = CAKeyframeAnimation(keyPath: "opacity")
+            blink.values = [1.0, 0.0]
+            blink.keyTimes = [0, 0.5]
+            blink.calculationMode = .discrete
+            blink.duration = interval * 2
+            blink.repeatCount = .infinity
+            layer.add(blink, forKey: "blink")
+            return
+        }
         if to {
-            UIView.animate(withDuration: 0.7, delay: 0, options: [.autoreverse, .repeat, .curveEaseIn], animations: {
+            UIView.animate(withDuration: interval, delay: 0, options: [.autoreverse, .repeat, .curveEaseIn], animations: {
                 self.layer.opacity = 0.0
             }, completion: { [weak self] done in
                 // Attempt again, could be the window transitioning
