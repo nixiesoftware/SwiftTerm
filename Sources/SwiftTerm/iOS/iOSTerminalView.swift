@@ -983,6 +983,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
               gestureRecognizer.state == .ended else { return }
 
         let tapHit = calculateTapHit(gesture: gestureRecognizer).grid
+        if handleTap(at: tapHit) {
+            return
+        }
         if let result = linkForClick(at: tapHit, hasCommandModifier: commandActive) {
             terminalDelegate?.requestOpenLink(source: self, link: result.link, params: result.params)
             return
@@ -1735,6 +1738,20 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     /// coordinates, which are flipped: the origin is the row's bottom-left
     /// and y grows upward. The Metal renderer does not call this.
     open func drawRowDecorations(absoluteRow: Int, rowRect: CGRect, in context: CGContext) {
+    }
+
+    /// A single tap on a cell, before the view's own handling: links,
+    /// focus, the context menu, the shell's prompt navigation. `position`
+    /// is the cell under the finger as an absolute buffer row. Return true
+    /// to take the tap. The default takes nothing.
+    open func handleTap(at position: Position) -> Bool {
+        false
+    }
+
+    /// The cell under a point in the view's coordinates, as an absolute
+    /// buffer row.
+    public func cellPosition(at point: CGPoint) -> Position {
+        calculateTapHit(point: point).grid
     }
 
     /// How long the caret stays visible, and hidden, on each blink.

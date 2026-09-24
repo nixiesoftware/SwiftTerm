@@ -1663,6 +1663,16 @@ extension TerminalView {
         renderOwner.semanticLeadingRoles()
     }
 
+    /// Rows of the active buffer with every cell's character, attribute and
+    /// role, as a copied value. `rows` is a range of absolute buffer rows,
+    /// clipped to the buffer; nil reads the screen. A host that
+    /// post-processes the page, recognising paths and links and styling or
+    /// making them tappable, reads this after each feed and answers with
+    /// ``rowStyles``. See ``TerminalPageSnapshot``.
+    public nonisolated func pageSnapshot(rows: Range<Int>? = nil) -> TerminalPageSnapshot {
+        renderOwner.pageSnapshot(rows: rows)
+    }
+
     /// Copies terminal buffer contents without exposing the mutable terminal.
     public nonisolated func getBufferAsData(
         kind: Terminal.BufferKind = .active,

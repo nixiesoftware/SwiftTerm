@@ -344,6 +344,43 @@ final class TerminalRenderOwner: Sendable {
         }
     }
 
+    /// Rows of the active buffer with every cell's character, attribute and
+    /// role, copied under the terminal lock. `rows` is a range of absolute
+    /// rows, clipped to the buffer; nil reads the screen.
+    func pageSnapshot(rows: Range<Int>?) -> TerminalPageSnapshot {
+        guard let terminal = currentSession()?.terminal else {
+            return TerminalPageSnapshot(baseRow: 0, viewportRow: 0, rowCount: 0, cols: 0,
+                                        cursor: Position(col: 0, row: 0),
+                                        isAlternateScreen: false, rows: [])
+        }
+        return terminal.terminalLock.withLock {
+            let buffer = terminal.buffer
+            let count = buffer.lines.count
+            let cols = terminal.cols
+            let wanted = rows ?? (buffer.yBase..<(buffer.yBase + terminal.rows))
+            let range = max(0, wanted.lowerBound)..<min(count, max(0, wanted.upperBound))
+            let pageRows: [TerminalPageRow] = range.map { index in
+                let line = buffer.lines[index]
+                var cells: [TerminalPageCell] = []
+                cells.reserveCapacity(cols)
+                for col in 0..<cols {
+                    let cell = line[col]
+                    let width = Int(cell.width)
+                    let character: Character? = (width == 0 || cell.code == 0) ? nil : cell.getCharacter()
+                    cells.append(TerminalPageCell(character: character, width: width,
+                                                  attribute: cell.attribute,
+                                                  role: cell.semanticContent))
+                }
+                return TerminalPageRow(row: index, isWrapped: line.isWrapped, cells: cells)
+            }
+            return TerminalPageSnapshot(baseRow: buffer.yBase, viewportRow: buffer.yDisp,
+                                        rowCount: count, cols: cols,
+                                        cursor: Position(col: buffer.x, row: buffer.y + buffer.yBase),
+                                        isAlternateScreen: terminal.isCurrentBufferAlternate,
+                                        rows: pageRows)
+        }
+    }
+
     /// The leading cell's OSC 133 role for every row of the active buffer,
     /// copied under the terminal lock.
     func semanticLeadingRoles() -> TerminalSemanticRoles {

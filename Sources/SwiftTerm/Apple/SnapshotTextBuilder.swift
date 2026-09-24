@@ -389,7 +389,7 @@ final class SnapshotTextBuilder {
             let hasUrl = shouldUnderlineLink(row: absoluteRow, column: col, width: width,
                                              cell: ch, context: context)
             let attributes: SnapshotTextAttributes?
-            if let rowStyle, let cellStyle = rowStyle.style(for: ch.semanticContent) {
+            if let rowStyle, let cellStyle = rowStyle.style(for: ch.semanticContent, column: col) {
                 attributes = getAttributes(cellStyle.apply(to: attr), withUrl: hasUrl,
                                            context: context)
             } else if baseAttributesStyleKey == styleKey && baseAttributesHasUrl == hasUrl {
