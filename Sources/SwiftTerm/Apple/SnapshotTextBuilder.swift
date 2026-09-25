@@ -313,7 +313,7 @@ final class SnapshotTextBuilder {
 
 
     func buildAttributedString (row snapshotRow: TerminalSnapshot.Row, absoluteRow: Int,
-                                context: SnapshotRenderContext) -> ViewLineInfo
+                                context: SnapshotRenderContext, trimmedRows: Int) -> ViewLineInfo
     {
         var segments: [ViewLineSegment] = []
         let line = snapshotRow.line
@@ -337,7 +337,7 @@ final class SnapshotTextBuilder {
         var powerlineGlyphs: [PowerlineRenderItem] = []
         // A row the host restyles bypasses the per-key memo below: the
         // attribute it draws is not the one the cell packs.
-        let resolver = RowStyleResolver(row: absoluteRow, context: context)
+        let resolver = RowStyleResolver(row: absoluteRow, trimmedRows: trimmedRows, context: context)
         let rowStyle: RowStyleResolver? = resolver.isEmpty ? nil : resolver
         
         // Batching state: accumulate consecutive characters with the same attributes

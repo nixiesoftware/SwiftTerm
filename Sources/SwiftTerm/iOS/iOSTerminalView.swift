@@ -1756,6 +1756,21 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
 
+
+    /// What ``rowStyles`` and ``liveRow`` keys count from: the value of the
+    /// buffer's trimmed-line count when the keys were made. As scrollback
+    /// trims, the renderer follows the keyed rows up on its own, so a host
+    /// never rekeys. A host that keys rows by absolute row plus the trimmed
+    /// count at the time leaves this at 0 and its keys are stable for good.
+    public var rowStylesTrimmedBase: Int = 0 {
+        didSet {
+            guard rowStylesTrimmedBase != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+
     /// The absolute buffer row drawn with ``liveRowStyle``.
     public var liveRow: Int? {
         didSet {

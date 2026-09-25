@@ -144,9 +144,13 @@ struct RowStyleResolver {
     let own: TerminalRowStyle?
     let page: TerminalRowStyle?
 
-    init(row: Int, context: SnapshotRenderContext) {
-        let own = context.rowStyles[row]
-        let page = row == context.liveRow ? context.liveRowStyle : context.pageStyle
+    init(row: Int, trimmedRows: Int, context: SnapshotRenderContext) {
+        // Keys count rows as of `rowStylesTrimmedBase` trimmed lines; the
+        // buffer has trimmed `trimmedRows` by now, so a key for this row is
+        // that many higher than its place in the buffer today.
+        let key = row + (trimmedRows - context.rowStylesTrimmedBase)
+        let own = context.rowStyles[key]
+        let page = key == context.liveRow ? context.liveRowStyle : context.pageStyle
         self.own = own?.isEmpty == false ? own : nil
         self.page = page.isEmpty ? nil : page
     }

@@ -535,6 +535,7 @@ struct FrameViewState: Sendable {
     let pageStyle: TerminalRowStyle
     let liveRowStyle: TerminalRowStyle
     let liveRow: Int?
+    let rowStylesTrimmedBase: Int
     /// Bumped on every change to the row styles, so a renderer that caches
     /// rows by content rebuilds them.
     let rowStylesVersion: UInt64
@@ -582,6 +583,7 @@ struct FrameViewState: Sendable {
         pageStyle = view.pageStyle
         liveRowStyle = view.liveRowStyle
         liveRow = view.liveRow
+        rowStylesTrimmedBase = view.rowStylesTrimmedBase
         rowStylesVersion = view.rowStylesVersion
     }
 }
@@ -653,6 +655,7 @@ struct SnapshotRenderContext {
     let pageStyle: TerminalRowStyle
     let liveRowStyle: TerminalRowStyle
     let liveRow: Int?
+    let rowStylesTrimmedBase: Int
     let rowStylesVersion: UInt64
     let cols: Int
 
@@ -716,6 +719,7 @@ struct SnapshotRenderContext {
         pageStyle = viewState.pageStyle
         liveRowStyle = viewState.liveRowStyle
         liveRow = viewState.liveRow
+        rowStylesTrimmedBase = viewState.rowStylesTrimmedBase
         rowStylesVersion = viewState.rowStylesVersion
         self.cols = cols
 
@@ -2678,7 +2682,8 @@ extension TerminalView {
                                             style: liveStyle,
                                             ansiColors: terminal.ansiColors, cols: cols)
         var result = textBuilder.buildAttributedString(row: snapshotRow, absoluteRow: row,
-                                                       context: context)
+                                                       context: context,
+                                                       trimmedRows: terminal.buffer.totalLinesTrimmed)
         result.images = line.images
         return result
     }
@@ -3295,7 +3300,8 @@ extension TerminalView {
             } 
             #endif
             let lineInfo = textBuilder.buildAttributedString(row: snapshotRow, absoluteRow: row,
-                                                             context: renderContext)
+                                                             context: renderContext,
+                                                             trimmedRows: snapshot.linesTop)
             let rowBase = lineOrigin.y + cellDimension.height
             var otherImages: [SnapshotImage] = []
             if let images = lineInfo.images {

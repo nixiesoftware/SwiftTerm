@@ -1682,7 +1682,8 @@ final class MetalTerminalRenderer {
         let attrInterval = Profiling.begin(.rowAttributedString)
         let lineInfo = textBuilder.buildAttributedString(row: row,
                                                          absoluteRow: absoluteRow,
-                                                         context: context)
+                                                         context: context,
+                                                         trimmedRows: snapshot.linesTop)
         attrInterval.end()
         let shapeInterval = Profiling.begin(.rowShape)
         let shapedSegments = buildShapedSegments(lineInfo.segments, context: context)
