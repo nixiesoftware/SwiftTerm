@@ -61,8 +61,10 @@ public final class Buffer {
     /// Monotonic count of lines that have been trimmed off the top of the
     /// scrollback since this buffer was created or reset. Increments by one
     /// each time output pushes a line out of a full scrollback buffer
-    /// (`Terminal.scroll`); resets to zero on hard reset (RIS) and buffer
-    /// (re)construction. Embedders can use this to anchor a scrolled-up
+    /// (`Terminal.scroll`), and by the lines dropped when a resize shrinks
+    /// the buffer or the scrollback is cleared, so that every absolute row
+    /// an embedder holds has moved up by exactly this much; resets to zero
+    /// on hard reset (RIS) and buffer (re)construction. Embedders can use this to anchor a scrolled-up
     /// viewport by absolute buffer line rather than pixel offset: at the
     /// scrollback cap the content height stays constant while rows shift,
     /// so a pixel-based anchor drifts by one row per trimmed line.
@@ -984,6 +986,7 @@ public final class Buffer {
                 let amountToTrim = lines.count - newMaxLength
                 if amountToTrim > 0 {
                     lines.trimStart(count: amountToTrim)
+                    linesTop += amountToTrim
                     yBase = max (yBase - amountToTrim, 0)
                     yDisp = max (yDisp - amountToTrim, 0)
                     savedY = max (savedY - amountToTrim, 0)
@@ -1052,6 +1055,7 @@ public final class Buffer {
         }
         let amountToTrim = yBase
         lines.trimStart (count: amountToTrim)
+        linesTop += amountToTrim
         yBase = 0
         yDisp = 0
         savedY = max (savedY - amountToTrim, 0)
@@ -1074,6 +1078,7 @@ public final class Buffer {
                 let amountToTrim = lines.count - newMaxLength
                 if amountToTrim > 0 {
                     lines.trimStart(count: amountToTrim)
+                    linesTop += amountToTrim
                     yBase = max(yBase - amountToTrim, 0)
                     yDisp = max(yDisp - amountToTrim, 0)
                     savedY = max(savedY - amountToTrim, 0)
