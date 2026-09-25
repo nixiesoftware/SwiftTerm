@@ -2083,16 +2083,25 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
 
         // Freeze auto-follow only while the finger is physically down
-        // (isTracking). Excluding the momentum coast is essential: after the
-        // finger lifts, deceleration keeps firing sync while streaming output
-        // extends the content and the bottom recedes ahead of the coasting
-        // offset — treating that "not at the bottom yet" reading as a manual
-        // scroll would re-freeze a view the user just flung to the bottom. This
-        // must key off isTracking, not isDragging: on device isDragging stays
-        // true through the entire coast, so it fails to exclude momentum. It also
-        // covers layout/system-driven offset changes (startup sizing, rotation,
-        // keyboard insets, buffer shrink), which are never a manual scroll.
-        guard isTracking else {
+        // (isTracking). Excluding the momentum coast from *engaging* the
+        // freeze is essential: after the finger lifts, deceleration keeps
+        // firing sync while streaming output extends the content and the
+        // bottom recedes ahead of the coasting offset — treating that "not at
+        // the bottom yet" reading as a manual scroll would re-freeze a view
+        // the user just flung to the bottom. This must key off isTracking, not
+        // isDragging: on device isDragging stays true through the entire
+        // coast, so it fails to exclude momentum.
+        //
+        // The viewport row itself must follow the offset through the coast,
+        // though, and while the view is already frozen: the frame draws the
+        // rows the offset points at, from a snapshot captured at the viewport
+        // row, and a fling that coasts past where the finger left it would
+        // otherwise land on rows no snapshot covers and draw blank. Layout and
+        // system-driven offset changes (startup sizing, rotation, keyboard
+        // insets, buffer shrink) arrive with none of these set and are never a
+        // manual scroll.
+        let fingerDown = isTracking
+        guard fingerDown || isDecelerating || userScrolling else {
             return
         }
 
@@ -2105,7 +2114,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             if displayBuffer.yDisp != row {
                 terminal.setViewYDisp(row)
             }
-            setManualScrollingLocked(true, terminal: terminal)
+            if fingerDown {
+                setManualScrollingLocked(true, terminal: terminal)
+            }
         }
     }
 
@@ -2189,11 +2200,13 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     open override var contentOffset: CGPoint {
         didSet {
             syncYDispFromContentOffset()
-#if canImport(MetalKit)
-            if useMetalRenderer, metalView != nil {
+            // The render snapshot holds one viewport's rows from the viewport
+            // row it was captured at. An offset change moves the viewport row,
+            // so the frame must recapture or the rows now on screen answer as
+            // absent and draw as blank. Both renderers, not only Metal.
+            if contentOffset != oldValue {
                 frameDriver.markDirty()
             }
-#endif
         }
     }
 
