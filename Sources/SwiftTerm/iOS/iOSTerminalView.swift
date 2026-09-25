@@ -1733,6 +1733,39 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     }
     var rowStylesVersion: UInt64 = 0
 
+    /// The style of every row that has no entry in ``rowStyles``, by the
+    /// role of each cell. Set once; the emulator applies it as rows are
+    /// shaped, so a host pays nothing per feed for it.
+    public var pageStyle = TerminalRowStyle() {
+        didSet {
+            guard pageStyle != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+
+    /// The style of the row at ``liveRow`` when it has no entry of its own:
+    /// the prompt the person is typing at, drawn apart from the ones done.
+    public var liveRowStyle = TerminalRowStyle() {
+        didSet {
+            guard liveRowStyle != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+
+    /// The absolute buffer row drawn with ``liveRowStyle``.
+    public var liveRow: Int? {
+        didSet {
+            guard liveRow != oldValue else { return }
+            rowStylesVersion &+= 1
+            withTerminal { $0.updateFullScreen() }
+            frameDriver.markDirty()
+        }
+    }
+
     /// Drawn by the host over each row the CoreGraphics renderer finishes,
     /// before the caret. `rowRect` is the row's rectangle in `context`'s
     /// coordinates, which are flipped: the origin is the row's bottom-left

@@ -532,6 +532,9 @@ struct FrameViewState: Sendable {
     let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
     /// Host row styles at capture time, keyed by absolute buffer row.
     let rowStyles: [Int: TerminalRowStyle]
+    let pageStyle: TerminalRowStyle
+    let liveRowStyle: TerminalRowStyle
+    let liveRow: Int?
     /// Bumped on every change to the row styles, so a renderer that caches
     /// rows by content rebuilds them.
     let rowStylesVersion: UInt64
@@ -576,6 +579,9 @@ struct FrameViewState: Sendable {
         bidiHostPolicy = view.bidiHostPolicy
         glyphFallbackProvider = view.glyphFallbackProvider
         rowStyles = view.rowStyles
+        pageStyle = view.pageStyle
+        liveRowStyle = view.liveRowStyle
+        liveRow = view.liveRow
         rowStylesVersion = view.rowStylesVersion
     }
 }
@@ -644,6 +650,9 @@ struct SnapshotRenderContext {
     let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
     /// Host row styles, keyed by absolute buffer row. See ``TerminalRowStyle``.
     let rowStyles: [Int: TerminalRowStyle]
+    let pageStyle: TerminalRowStyle
+    let liveRowStyle: TerminalRowStyle
+    let liveRow: Int?
     let rowStylesVersion: UInt64
     let cols: Int
 
@@ -704,6 +713,9 @@ struct SnapshotRenderContext {
         bidiHostPolicy = viewState.bidiHostPolicy
         glyphFallbackProvider = viewState.glyphFallbackProvider
         rowStyles = viewState.rowStyles
+        pageStyle = viewState.pageStyle
+        liveRowStyle = viewState.liveRowStyle
+        liveRow = viewState.liveRow
         rowStylesVersion = viewState.rowStylesVersion
         self.cols = cols
 

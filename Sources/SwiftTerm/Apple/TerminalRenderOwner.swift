@@ -351,7 +351,7 @@ final class TerminalRenderOwner: Sendable {
         guard let terminal = currentSession()?.terminal else {
             return TerminalPageSnapshot(baseRow: 0, viewportRow: 0, rowCount: 0, cols: 0,
                                         cursor: Position(col: 0, row: 0),
-                                        isAlternateScreen: false, rows: [])
+                                        isAlternateScreen: false, trimmedRows: 0, rows: [])
         }
         return terminal.terminalLock.withLock {
             let buffer = terminal.buffer
@@ -377,6 +377,7 @@ final class TerminalRenderOwner: Sendable {
                                         rowCount: count, cols: cols,
                                         cursor: Position(col: buffer.x, row: buffer.y + buffer.yBase),
                                         isAlternateScreen: terminal.isCurrentBufferAlternate,
+                                        trimmedRows: buffer.totalLinesTrimmed,
                                         rows: pageRows)
         }
     }

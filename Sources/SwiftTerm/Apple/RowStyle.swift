@@ -27,16 +27,20 @@ public struct TerminalCellStyle: Equatable, Hashable, Sendable {
     public var background: Attribute.Color?
     /// Replace the program's own colours too, not only the defaults.
     public var overridesProgramColors: Bool
+    /// Draw nothing for the cell: no glyph, no underline, no background.
+    /// For a host that shows a block's rows some other way.
+    public var hidden: Bool
 
     public init(bold: Bool = false, faint: Bool = false, underline: Bool = false,
                 foreground: Attribute.Color? = nil, background: Attribute.Color? = nil,
-                overridesProgramColors: Bool = false) {
+                overridesProgramColors: Bool = false, hidden: Bool = false) {
         self.bold = bold
         self.faint = faint
         self.underline = underline
         self.foreground = foreground
         self.background = background
         self.overridesProgramColors = overridesProgramColors
+        self.hidden = hidden
     }
 
     /// The attribute as this style redraws it.
@@ -105,18 +109,53 @@ public struct TerminalRowStyle: Equatable, Hashable, Sendable {
         self.spans = spans
     }
 
-    /// The style for a cell at `column` with the given role, if this row
-    /// sets one: the span covering the column, else the role's.
-    func style(for content: SemanticContent, column: Int) -> TerminalCellStyle? {
+    /// The span covering `column`, if any.
+    func spanStyle(at column: Int) -> TerminalCellStyle? {
         for span in spans where span.columns.contains(column) {
             return span.style
         }
+        return nil
+    }
+
+    /// The style for a cell of the given role, if this row sets one.
+    func roleStyle(for content: SemanticContent) -> TerminalCellStyle? {
         switch content {
         case .prompt: return prompt
         case .input: return input
         case .output: return output
         case .none: return other
         }
+    }
+
+    /// The style for a cell at `column` with the given role, if this row
+    /// sets one: the span covering the column, else the role's.
+    func style(for content: SemanticContent, column: Int) -> TerminalCellStyle? {
+        spanStyle(at: column) ?? roleStyle(for: content)
+    }
+
+    var isEmpty: Bool {
+        prompt == nil && input == nil && output == nil && other == nil && spans.isEmpty
+    }
+}
+
+/// How one row resolves its cell styles: the row's own entry first, then
+/// the page's style for rows like it. Built once per row when it is shaped.
+struct RowStyleResolver {
+    let own: TerminalRowStyle?
+    let page: TerminalRowStyle?
+
+    init(row: Int, context: SnapshotRenderContext) {
+        let own = context.rowStyles[row]
+        let page = row == context.liveRow ? context.liveRowStyle : context.pageStyle
+        self.own = own?.isEmpty == false ? own : nil
+        self.page = page.isEmpty ? nil : page
+    }
+
+    var isEmpty: Bool { own == nil && page == nil }
+
+    func style(for content: SemanticContent, column: Int) -> TerminalCellStyle? {
+        own?.spanStyle(at: column) ?? own?.roleStyle(for: content)
+            ?? page?.spanStyle(at: column) ?? page?.roleStyle(for: content)
     }
 }
 
@@ -181,16 +220,20 @@ public struct TerminalPageSnapshot: Equatable, Sendable {
     public let cursor: Position
     /// Whether the alternate screen is showing.
     public let isAlternateScreen: Bool
+    /// Rows dropped from the top of the scrollback so far. When it grows
+    /// by n, every absolute row a host holds moved up by n.
+    public let trimmedRows: Int
     public let rows: [TerminalPageRow]
 
     public init(baseRow: Int, viewportRow: Int, rowCount: Int, cols: Int, cursor: Position,
-                isAlternateScreen: Bool, rows: [TerminalPageRow]) {
+                isAlternateScreen: Bool, trimmedRows: Int, rows: [TerminalPageRow]) {
         self.baseRow = baseRow
         self.viewportRow = viewportRow
         self.rowCount = rowCount
         self.cols = cols
         self.cursor = cursor
         self.isAlternateScreen = isAlternateScreen
+        self.trimmedRows = trimmedRows
         self.rows = rows
     }
 }

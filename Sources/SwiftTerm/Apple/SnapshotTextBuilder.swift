@@ -337,7 +337,8 @@ final class SnapshotTextBuilder {
         var powerlineGlyphs: [PowerlineRenderItem] = []
         // A row the host restyles bypasses the per-key memo below: the
         // attribute it draws is not the one the cell packs.
-        let rowStyle = context.rowStyles[absoluteRow]
+        let resolver = RowStyleResolver(row: absoluteRow, context: context)
+        let rowStyle: RowStyleResolver? = resolver.isEmpty ? nil : resolver
         
         // Batching state: accumulate consecutive characters with the same attributes
         var pendingText = ""
@@ -390,8 +391,8 @@ final class SnapshotTextBuilder {
                                              cell: ch, context: context)
             let attributes: SnapshotTextAttributes?
             if let rowStyle, let cellStyle = rowStyle.style(for: ch.semanticContent, column: col) {
-                attributes = getAttributes(cellStyle.apply(to: attr), withUrl: hasUrl,
-                                           context: context)
+                attributes = cellStyle.hidden ? nil
+                    : getAttributes(cellStyle.apply(to: attr), withUrl: hasUrl, context: context)
             } else if baseAttributesStyleKey == styleKey && baseAttributesHasUrl == hasUrl {
                 attributes = baseAttributes
             } else {
