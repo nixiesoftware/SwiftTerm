@@ -2683,7 +2683,8 @@ extension TerminalView {
                                             ansiColors: terminal.ansiColors, cols: cols)
         var result = textBuilder.buildAttributedString(row: snapshotRow, absoluteRow: row,
                                                        context: context,
-                                                       trimmedRows: terminal.buffer.totalLinesTrimmed)
+                                                       trimmedRows: terminal.buffer.totalLinesTrimmed,
+                                                       isAlternateScreen: terminal.isCurrentBufferAlternate)
         result.images = line.images
         return result
     }
@@ -3301,7 +3302,8 @@ extension TerminalView {
             #endif
             let lineInfo = textBuilder.buildAttributedString(row: snapshotRow, absoluteRow: row,
                                                              context: renderContext,
-                                                             trimmedRows: snapshot.linesTop)
+                                                             trimmedRows: snapshot.linesTop,
+                                                             isAlternateScreen: snapshot.isAltBuffer)
             let rowBase = lineOrigin.y + cellDimension.height
             var otherImages: [SnapshotImage] = []
             if let images = lineInfo.images {

@@ -313,7 +313,8 @@ final class SnapshotTextBuilder {
 
 
     func buildAttributedString (row snapshotRow: TerminalSnapshot.Row, absoluteRow: Int,
-                                context: SnapshotRenderContext, trimmedRows: Int) -> ViewLineInfo
+                                context: SnapshotRenderContext, trimmedRows: Int,
+                                isAlternateScreen: Bool) -> ViewLineInfo
     {
         var segments: [ViewLineSegment] = []
         let line = snapshotRow.line
@@ -337,8 +338,12 @@ final class SnapshotTextBuilder {
         var powerlineGlyphs: [PowerlineRenderItem] = []
         // A row the host restyles bypasses the per-key memo below: the
         // attribute it draws is not the one the cell packs.
-        let resolver = RowStyleResolver(row: absoluteRow, trimmedRows: trimmedRows, context: context)
-        let rowStyle: RowStyleResolver? = resolver.isEmpty ? nil : resolver
+        // Row styles are the host's reading of the shell's page, keyed into
+        // the normal buffer. A full-screen program owns the alternate
+        // screen: nothing is laid over it.
+        let resolver = isAlternateScreen ? nil
+            : RowStyleResolver(row: absoluteRow, trimmedRows: trimmedRows, context: context)
+        let rowStyle: RowStyleResolver? = resolver?.isEmpty == false ? resolver : nil
         
         // Batching state: accumulate consecutive characters with the same attributes
         var pendingText = ""
