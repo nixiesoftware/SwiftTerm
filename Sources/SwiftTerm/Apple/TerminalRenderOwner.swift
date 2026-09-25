@@ -358,7 +358,12 @@ final class TerminalRenderOwner: Sendable {
             let count = buffer.lines.count
             let cols = terminal.cols
             let wanted = rows ?? (buffer.yBase..<(buffer.yBase + terminal.rows))
-            let range = max(0, wanted.lowerBound)..<min(count, max(0, wanted.upperBound))
+            // Clipped to the buffer, and empty rather than invalid when the
+            // asked rows lie wholly outside it: a host that hit-tests a tap
+            // below the last row asks for a row that does not exist.
+            let upper = min(count, max(0, wanted.upperBound))
+            let lower = min(upper, max(0, wanted.lowerBound))
+            let range = lower..<upper
             let pageRows: [TerminalPageRow] = range.map { index in
                 let line = buffer.lines[index]
                 var cells: [TerminalPageCell] = []
